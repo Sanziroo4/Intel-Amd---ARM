@@ -20,3 +20,6 @@ body{filter:none}body{--bg:#101112}section,footer,.brand-strip{filter:grayscale(
 .video-shell.is-portrait{aspect-ratio:auto}
 .video-shell.is-portrait video{height:min(80svh,760px);object-fit:contain}
 @media(max-width:600px){.video-shell.is-portrait video{height:auto;aspect-ratio:240/427;max-height:none}}
+/* Preserve the author's original video colors within the monochrome page. */
+#video{filter:none}
+#video .video-credit,#video .video-caption{color:#969896}
