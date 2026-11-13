@@ -234,9 +234,8 @@ async function loadVideo() {
     const media = await response.json();
     if (!media.src) return;
     const video = $('#atlas-video');
-    video.src = new URL(media.src, document.baseURI).href;
-    video.hidden = false; $('#video-pending').hidden = true;
     video.addEventListener('loadedmetadata', () => {
+      $('.video-shell').classList.toggle('is-portrait', video.videoHeight > video.videoWidth);
       if (Number.isFinite(video.duration)) {
         const seconds = Math.floor(video.duration);
         $('#video-duration').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')} · ${media.label || 'MP4'}`;
@@ -248,6 +247,8 @@ async function loadVideo() {
       $('#video-pending>div>span:last-child').textContent = 'Қосылымды тексеріп, бетті жаңартыңыз.';
       $('#video-duration').textContent = 'Ойнату қатесі';
     });
+    video.src = new URL(media.src, document.baseURI).href;
+    video.hidden = false; $('#video-pending').hidden = true;
   } catch { /* The explicitly labelled pending state remains visible. */ }
 }
 loadVideo();

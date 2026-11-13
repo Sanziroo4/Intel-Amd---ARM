@@ -13,7 +13,9 @@ test('all local resources load and navigation targets exist', async ({ page }) =
     await expect(page).toHaveURL(new RegExp(href + '$'));
   }
   await expect(page.locator('html')).toHaveAttribute('lang', 'kk');
-  expect(await page.locator('img').evaluateAll((images) => images.every((i) => i.complete && i.naturalWidth > 0))).toBeTruthy();
+  // The hidden, lazy-loaded fallback image need not decode once video is ready.
+  expect(await page.locator('img:visible').evaluateAll((images) => images.every((i) => i.complete && i.naturalWidth > 0))).toBeTruthy();
+  expect((await page.request.get('/assets/video-poster.svg')).status()).toBe(200);
   expect(errors).toEqual([]); expect(failures).toEqual([]);
 });
 
@@ -133,20 +135,43 @@ test('tablet and desktop layouts have no horizontal overflow', async ({ page }) 
   await page.screenshot({ path: 'test-results/desktop.png', fullPage: true });
 });
 
-test('video state is explicit; real media must play if supplied', async ({ page }) => {
+test('author video plays, pauses, seeks, changes volume and enters fullscreen', async ({ page }) => {
   await page.goto('/');
   const manifest = await (await page.request.get('/assets/media.json')).json();
-  if (!manifest.src) {
-    await expect(page.locator('#video-pending')).toBeVisible();
-    await expect(page.locator('#atlas-video')).toBeHidden();
-    test.info().annotations.push({ type: 'blocked', description: 'Actual uploaded video exceeds transfer limit; playback remains unverified.' });
-  } else {
-    await expect(page.locator('#atlas-video')).toBeVisible();
-    await page.locator('#atlas-video').evaluate(async (v) => { v.muted = true; await v.play(); });
-    await expect.poll(() => page.locator('#atlas-video').evaluate((v) => v.currentTime)).toBeGreaterThan(.5);
-    const duration = await page.locator('#atlas-video').evaluate((v) => v.duration);
-    expect(duration).toBeGreaterThan(0);
-    await page.locator('#atlas-video').evaluate((v) => { v.pause(); v.currentTime = v.duration / 2; });
-    await expect.poll(() => page.locator('#atlas-video').evaluate((v) => v.seeking)).toBe(false);
-  }
+  expect(manifest.src).toBe('./assets/intel-and-amd.mp4');
+  const video = page.locator('#atlas-video');
+  await expect(video).toBeVisible();
+  await expect(page.locator('#video-pending')).toBeHidden();
+  await expect.poll(() => video.evaluate((v) => v.readyState)).toBeGreaterThanOrEqual(1);
+  expect(await video.evaluate((v) => v.paused && !v.autoplay && v.controls && v.preload === 'metadata')).toBe(true);
+  expect(await video.evaluate((v) => v.duration)).toBeCloseTo(manifest.durationSeconds, 1);
+  await expect(page.locator('#video-duration')).toContainText('01:54');
+  await video.evaluate(async (v) => { v.muted = true; await v.play(); });
+  await expect.poll(() => video.evaluate((v) => v.currentTime)).toBeGreaterThan(.5);
+  await video.evaluate((v) => { v.pause(); v.volume = .35; v.muted = false; });
+  const pausedAt = await video.evaluate((v) => v.currentTime);
+  await page.waitForTimeout(200);
+  expect(await video.evaluate((v) => v.currentTime)).toBeCloseTo(pausedAt, 2);
+  expect(await video.evaluate((v) => v.volume === .35 && !v.muted)).toBe(true);
+  await video.evaluate((v) => { v.currentTime = v.duration / 2; });
+  await expect.poll(() => video.evaluate((v) => v.seeking)).toBe(false);
+  expect(await video.evaluate((v) => v.currentTime)).toBeCloseTo(manifest.durationSeconds / 2, 1);
+  await video.evaluate((v) => v.requestFullscreen());
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('atlas-video');
+  await page.evaluate(() => document.exitFullscreen());
+  const range = await page.request.get('/assets/intel-and-amd.mp4', { headers: { Range: 'bytes=0-1023' } });
+  expect(range.status()).toBe(206);
+  expect((await range.body()).length).toBe(1024);
+});
+
+test('portrait video preserves its aspect ratio on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const video = page.locator('#atlas-video');
+  await expect(page.locator('.video-shell')).toHaveClass(/is-portrait/);
+  const bounds = await video.boundingBox();
+  expect(bounds.width / bounds.height).toBeCloseTo(480 / 854, 2);
+  await video.evaluate(async (v) => { v.muted = true; await v.play(); });
+  await expect.poll(() => video.evaluate((v) => v.currentTime)).toBeGreaterThan(.5);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

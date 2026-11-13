@@ -1,5 +1,6 @@
 {
-  "src": null,
-  "label": "Авторлық видео",
-  "status": "Awaiting a transferable copy of Intel and AMD.mp4 (upload exceeds the 32 MiB workspace transfer limit)."
+  "src": "./assets/intel-and-amd.mp4",
+  "label": "MP4 · авторлық видео",
+  "durationSeconds": 114.149002,
+  "bytes": 2499269
 }
